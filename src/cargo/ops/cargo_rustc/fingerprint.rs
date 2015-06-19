@@ -357,6 +357,9 @@ fn calculate_target_mtime(dep_info: &Path) -> CargoResult<Option<FileTime>> {
     }));
     let deps = &line[pos + 2..];
 
+    // Workaround the https://github.com/erickt/rust-quasi/issues/7 by removing "<quote\ expansion" entries from the deps.
+    let deps = deps.replace (r" <quote\ expansion", "");
+
     let mut deps = deps.split(' ').map(|s| s.trim()).filter(|s| !s.is_empty());
     loop {
         let mut file = match deps.next() {
