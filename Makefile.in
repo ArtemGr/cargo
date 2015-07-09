@@ -1,4 +1,4 @@
-CFG_RELEASE_NUM=0.3.0
+CFG_RELEASE_NUM=0.4.0
 CFG_RELEASE_LABEL=
 
 include config.mk
@@ -52,6 +52,19 @@ TARGET_ROOT = target
 BIN_TARGETS := cargo
 BIN_TARGETS := $(BIN_TARGETS:src/bin/%.rs=%)
 BIN_TARGETS := $(filter-out cargo,$(BIN_TARGETS))
+
+ifdef CFG_MSVC_INCLUDE_PATH
+export INCLUDE := $(CFG_MSVC_INCLUDE_PATH)
+endif
+ifdef CFG_MSVC_LIB_PATH
+export LIB := $(CFG_MSVC_LIB_PATH)
+endif
+ifdef CFG_MSVC_BIN
+export PATH := $(CFG_MSVC_BIN):$(PATH)
+endif
+ifdef CFG_MSVC_WINDOWS_SDK_DIR
+export PATH := $(CFG_MSVC_WINDOWS_SDK_DIR):$(PATH)
+endif
 
 define DIST_TARGET
 ifdef CFG_ENABLE_OPTIMIZE
@@ -200,15 +213,23 @@ install-$(1): $$(DISTDIR_$(1))/$$(PKG_NAME)-$(1).tar.gz
 	$$(PKGDIR_$(1))/install.sh \
 		--prefix="$$(CFG_PREFIX)" \
 		--destdir="$$(DESTDIR)" $$(MAYBE_DISABLE_VERIFY)
+
+uninstall-$(1): $$(DISTDIR_$(1))/$$(PKG_NAME)-$(1).tar.gz
+	$$(PKGDIR_$(1))/install.sh \
+		--prefix="$$(CFG_PREFIX)" \
+		--destdir="$$(DESTDIR)" \
+		--uninstall
 endef
 $(foreach target,$(CFG_TARGET),$(eval $(call DO_DIST_TARGET,$(target))))
 
 dist: $(foreach target,$(CFG_TARGET),dist-$(target))
 distcheck: $(foreach target,$(CFG_TARGET),distcheck-$(target))
 install: $(foreach target,$(CFG_TARGET),install-$(target))
+uninstall: $(foreach target,$(CFG_TARGET), uninstall-$(target))
+
 
 # Setup phony tasks
-.PHONY: all clean clean-all dist distcheck install test test-unit style
+.PHONY: all clean clean-all dist distcheck install uninstall test test-unit style
 
 # Disable unnecessary built-in rules
 .SUFFIXES:

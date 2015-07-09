@@ -128,6 +128,18 @@ git = "https://github.com/wycats/hammer.rs"
 
 [dependencies.color]
 git = "https://github.com/bjz/color-rs"
+
+[dependencies.geometry]
+path = "crates/geometry"
+```
+
+You may prefer to use TOML's inline table syntax:
+
+```toml
+[dependencies]
+hammer = { version = "0.5.0", git = "https://github.com/wycats/hammer.rs" }
+color = { git = "https://github.com/bjz/color-rs" }
+geometry = { path = "crates/geometry" }
 ```
 
 You can specify the source of a dependency in one of two ways at the moment:
@@ -152,11 +164,31 @@ Platform-specific dependencies take the same format, but are listed under the
 `target.$triple` section:
 
 ```toml
-[target.x86_64-unknown-linux-gnu.dependencies]
-openssl = "1.0.1"
-
 [target.x86_64-pc-windows-gnu.dependencies]
 winhttp = "0.4.0"
+
+[target.i686-unknown-linux-gnu.dependencies]
+openssl = "1.0.1"
+native = { path = "native/i686" }
+
+[target.x86_64-unknown-linux-gnu.dependencies]
+openssl = "1.0.1"
+native = { path = "native/x86_64" }
+```
+
+If you're using a target file, quote the full path and file name:
+
+```toml
+[target."x86_64/windows.json".dependencies]
+winhttp = "0.4.0"
+
+[target."i686/linux.json".dependencies]
+openssl = "1.0.1"
+native = { path = "native/i686" }
+
+[target."x86_64/linux.json".dependencies]
+openssl = "1.0.1"
+native = { path = "native/x86_64" }
 ```
 
 # The `[profile.*]` Sections
@@ -373,15 +405,16 @@ If it is a library, name the main source file `src/lib.rs`.
 Cargo will also treat any files located in `src/bin/*.rs` as
 executables.
 
-When you run `cargo build`, Cargo will compile all of these files into
-the `target` directory.
+Your project can optionally contain folders named `examples`, `tests`, and
+`benches`, which Cargo will treat as containing example executable files,
+integration tests, and benchmarks respectively.
 
 ```notrust
 ▾ src/          # directory containing source files
-  ▾ bin/        # (optional) directory containing executables
-    *.rs
   lib.rs        # the main entry point for libraries and packages
   main.rs       # the main entry point for projects producing executables
+  ▾ bin/        # (optional) directory containing additional executables
+    *.rs
 ▾ examples/     # (optional) examples
   *.rs
 ▾ tests/        # (optional) integration tests
@@ -393,12 +426,12 @@ the `target` directory.
 # Examples
 
 Files located under `examples` are example uses of the functionality
-provided by the library.  When compiled, they are placed in the
+provided by the library. When compiled, they are placed in the
 `target/examples` directory.
 
-They must compile as executables (with `main.rs`) and load in the
-library by using `extern crate <library-name>`. They are compiled when
-you run your tests to protect them from bitrotting.
+They must compile as executables (with a `main()` function) and load in the
+library by using `extern crate <library-name>`. They are compiled when you run
+your tests to protect them from bitrotting.
 
 # Tests
 

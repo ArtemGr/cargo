@@ -15,6 +15,7 @@ struct Options {
     flag_target: Option<String>,
     flag_manifest_path: Option<String>,
     flag_verbose: bool,
+    flag_quiet: bool,
     flag_release: bool,
     flag_lib: bool,
     flag_bin: Vec<String>,
@@ -42,8 +43,9 @@ Options:
     --features FEATURES      Features to compile for the package
     --no-default-features    Do not compile default features for the package
     --target TRIPLE          Target triple which compiles will be for
-    --manifest-path PATH     Path to the manifest to fetch depednencies for
+    --manifest-path PATH     Path to the manifest to fetch dependencies for
     -v, --verbose            Use verbose output
+    -q, --quiet              No output printed to stdout
 
 The specified target for the current package (or package specified by SPEC if
 provided) will be compiled along with all of its dependencies. The specified
@@ -60,7 +62,7 @@ must be used to select which target is compiled.
 pub fn execute(options: Options, config: &Config) -> CliResult<Option<()>> {
     debug!("executing; cmd=cargo-rustc; args={:?}",
            env::args().collect::<Vec<_>>());
-    config.shell().set_verbose(options.flag_verbose);
+    try!(config.shell().set_verbosity(options.flag_verbose, options.flag_quiet));
 
     let root = try!(find_root_manifest_for_cwd(options.flag_manifest_path));
 
