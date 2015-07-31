@@ -96,7 +96,7 @@
 //! each of which has many sub-folders with two letters. At the end of all these
 //! are the actual crate files themselves.
 //!
-//! The purpose of this layou tis to hopefully cut down on `ls` sizes as well as
+//! The purpose of this layout is to hopefully cut down on `ls` sizes as well as
 //! efficient lookup based on the crate name itself.
 //!
 //! ## Crate files
@@ -437,6 +437,13 @@ impl<'cfg> RegistrySource<'cfg> {
             "build" => Kind::Build,
             _ => Kind::Normal,
         };
+
+        // Unfortunately older versions of cargo and/or the registry ended up
+        // publishing lots of entries where the features array contained the
+        // empty feature, "", inside. This confuses the resolution process much
+        // later on and these features aren't actually valid, so filter them all
+        // out here.
+        let features = features.into_iter().filter(|s| !s.is_empty()).collect();
 
         Ok(dep.set_optional(optional)
               .set_default_features(default_features)
