@@ -13,7 +13,8 @@ _cargo()
 	local opt_help='-h --help'
 	local opt_verbose='-v --verbose'
 	local opt_quiet='-q --quiet'
-	local opt_common="$opt_help $opt_verbose $opt_quiet"
+	local opt_color='--color'
+	local opt_common="$opt_help $opt_verbose $opt_quiet $opt_color"
 	local opt_pkg='-p --package'
 	local opt_feat='--features --no-default-features'
 	local opt_mani='--manifest-path'
@@ -61,6 +62,9 @@ _cargo()
 			--example)
 				COMPREPLY=( $( compgen -W "$(_get_examples)" -- "$cur" ) )
 				;;
+			--target)
+				COMPREPLY=( $( compgen -W "$(_get_targets)" -- "$cur" ) )
+				;;
 			help)
 				COMPREPLY=( $( compgen -W "$__cargo_commands" -- "$cur" ) )
 				;;
@@ -77,7 +81,7 @@ _cargo()
 } &&
 complete -F _cargo cargo
 
-__cargo_commands=$(cargo --list | tail -n +2)
+__cargo_commands=$(cargo --list 2>/dev/null | tail -n +2)
 
 _locate_manifest(){
 	local manifest=`cargo locate-project 2>/dev/null`
@@ -93,5 +97,33 @@ _get_examples(){
 	if [[ "${names[@]}" != "*" ]]; then
 		echo "${names[@]}"
 	fi
+}
+
+_get_targets(){
+	local CURRENT_PATH
+	if [ `uname -o` == "Cygwin" -a -f "$PWD"/Cargo.toml ]; then
+		CURRENT_PATH=$PWD
+	else
+		CURRENT_PATH=$(_locate_manifest)
+	fi
+	if [[ -z "$CURRENT_PATH" ]]; then
+		return 1
+	fi
+	local TARGETS=()
+	local FIND_PATHS=( "/" )
+	local FIND_PATH LINES LINE
+	while [[ "$CURRENT_PATH" != "/" ]]; do
+	    FIND_PATHS+=( "$CURRENT_PATH" )
+	    CURRENT_PATH=$(dirname $CURRENT_PATH)
+	done
+	for FIND_PATH in ${FIND_PATHS[@]}; do
+	    if [[ -f "$FIND_PATH"/.cargo/config ]]; then
+		LINES=( `grep "$FIND_PATH"/.cargo/config -e "^\[target\."` )
+		for LINE in ${LINES[@]}; do
+		    TARGETS+=(`sed 's/^\[target\.\(.*\)\]$/\1/' <<< $LINE`)
+		done
+	    fi
+	done
+	echo "${TARGETS[@]}"
 }
 # vim:ft=sh

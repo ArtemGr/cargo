@@ -13,13 +13,13 @@ fn setup() {
 }
 
 fn my_process(s: &str) -> ProcessBuilder {
-    let mut p = process(s).unwrap();
+    let mut p = process(s);
     p.cwd(&paths::root()).env("HOME", &paths::home());
     return p;
 }
 
 fn cargo_process(s: &str) -> ProcessBuilder {
-    let mut p = process(&cargo_dir().join("cargo")).unwrap();
+    let mut p = process(&cargo_dir().join("cargo"));
     p.arg(s).cwd(&paths::root()).env("HOME", &paths::home());
     return p;
 }
@@ -87,7 +87,7 @@ test!(existing {
     fs::create_dir(&dst).unwrap();
     assert_that(cargo_process("new").arg("foo"),
                 execs().with_status(101)
-                       .with_stderr(format!("Destination `{}` already exists\n",
+                       .with_stderr(format!("destination `{}` already exists\n",
                                             dst.display())));
 });
 
@@ -255,6 +255,23 @@ test!(subpackage_no_git {
                  is_not(existing_file()));
     assert_that(&paths::root().join("foo/components/subcomponent/.gitignore"),
                  is_not(existing_file()));
+});
+
+test!(subpackage_git_with_vcs_arg {
+    assert_that(cargo_process("new").arg("foo").env("USER", "foo"),
+                execs().with_status(0));
+
+    let subpackage = paths::root().join("foo").join("components");
+    fs::create_dir(&subpackage).unwrap();
+    assert_that(cargo_process("new").arg("foo/components/subcomponent")
+                                    .arg("--vcs").arg("git")
+                                    .env("USER", "foo"),
+                execs().with_status(0));
+
+    assert_that(&paths::root().join("foo/components/subcomponent/.git"),
+                 existing_dir());
+    assert_that(&paths::root().join("foo/components/subcomponent/.gitignore"),
+                 existing_file());
 });
 
 test!(unknown_flags {

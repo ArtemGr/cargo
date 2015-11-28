@@ -70,11 +70,11 @@ test!(simple_cross {
         "#, alternate_arch()));
 
     let target = alternate();
-    assert_that(p.cargo_process("build").arg("--target").arg(&target),
+    assert_that(p.cargo_process("build").arg("--target").arg(&target).arg("-v"),
                 execs().with_status(0));
     assert_that(&p.target_bin(&target, "foo"), existing_file());
 
-    assert_that(process(&p.target_bin(&target, "foo")).unwrap(),
+    assert_that(process(&p.target_bin(&target, "foo")),
                 execs().with_status(0));
 });
 
@@ -110,7 +110,7 @@ test!(simple_deps {
                 execs().with_status(0));
     assert_that(&p.target_bin(&target, "foo"), existing_file());
 
-    assert_that(process(&p.target_bin(&target, "foo")).unwrap(),
+    assert_that(process(&p.target_bin(&target, "foo")),
                 execs().with_status(0));
 });
 
@@ -187,7 +187,7 @@ test!(plugin_deps {
                 execs().with_status(0));
     assert_that(&foo.target_bin(&target, "foo"), existing_file());
 
-    assert_that(process(&foo.target_bin(&target, "foo")).unwrap(),
+    assert_that(process(&foo.target_bin(&target, "foo")),
                 execs().with_status(0));
 });
 
@@ -272,7 +272,7 @@ test!(plugin_to_the_max {
                 execs().with_status(0));
     assert_that(&foo.target_bin(&target, "foo"), existing_file());
 
-    assert_that(process(&foo.target_bin(&target, "foo")).unwrap(),
+    assert_that(process(&foo.target_bin(&target, "foo")),
                 execs().with_status(0));
 });
 
@@ -565,27 +565,29 @@ test!(build_script_needed_for_host_and_target {
 
     assert_that(p.cargo_process("build").arg("--target").arg(&target).arg("-v"),
                 execs().with_status(0)
-                       .with_stdout(&format!("\
-{compiling} d1 v0.0.0 ({url})
-{running} `rustc d1[..]build.rs [..] --out-dir {dir}[..]target[..]build[..]d1-[..]`
-{running} `{dir}[..]target[..]build[..]d1-[..]build-script-build`
-{running} `{dir}[..]target[..]build[..]d1-[..]build-script-build`
-{running} `rustc d1[..]src[..]lib.rs [..] --target {target} [..] \
-           -L /path/to/{target}`
-{running} `rustc d1[..]src[..]lib.rs [..] \
-           -L /path/to/{host}`
-{compiling} d2 v0.0.0 ({url})
+                       .with_stdout_contains(&format!("\
+{compiling} d1 v0.0.0 ({url})", compiling = COMPILING, url = p.url()))
+                       .with_stdout_contains(&format!("\
+{running} `rustc d1[..]build.rs [..] --out-dir {dir}[..]target[..]build[..]d1-[..]`",
+    running = RUNNING, dir = p.root().display()))
+                       .with_stdout_contains(&format!("\
+{running} `{dir}[..]target[..]build[..]d1-[..]build-script-build`", running = RUNNING,
+    dir = p.root().display()))
+                       .with_stdout_contains(&format!("\
+{running} `rustc d1[..]src[..]lib.rs [..]`", running = RUNNING))
+                       .with_stdout_contains(&format!("\
+{compiling} d2 v0.0.0 ({url})", compiling = COMPILING, url = p.url()))
+                       .with_stdout_contains(&format!("\
 {running} `rustc d2[..]src[..]lib.rs [..] \
-           -L /path/to/{host}`
-{compiling} foo v0.0.0 ({url})
+           -L /path/to/{host}`", running = RUNNING, host = host))
+                       .with_stdout_contains(&format!("\
+{compiling} foo v0.0.0 ({url})", compiling = COMPILING, url = p.url()))
+                       .with_stdout_contains(&format!("\
 {running} `rustc build.rs [..] --out-dir {dir}[..]target[..]build[..]foo-[..] \
-           -L /path/to/{host}`
-{running} `{dir}[..]target[..]build[..]foo-[..]build-script-build`
+           -L /path/to/{host}`", running = RUNNING, dir = p.root().display(), host = host))
+                       .with_stdout_contains(&format!("\
 {running} `rustc src[..]main.rs [..] --target {target} [..] \
-           -L /path/to/{target}`
-", compiling = COMPILING, running = RUNNING, target = target, host = host,
-   url = p.url(),
-   dir = p.root().display())));
+           -L /path/to/{target}`", running = RUNNING, target = target)));
 });
 
 test!(build_deps_for_the_right_arch {
@@ -695,4 +697,174 @@ test!(plugin_build_script_right_arch {
 {running} `[..]build-script-build[..]`
 {running} `rustc src[..]lib.rs [..]`
 ", compiling = COMPILING, running = RUNNING)));
+});
+
+test!(build_script_with_platform_specific_dependencies {
+    if disabled() { return }
+
+    let target = alternate();
+    let host = ::rustc_host();
+    let p = project("foo")
+        .file("Cargo.toml", r#"
+            [package]
+            name = "foo"
+            version = "0.0.1"
+            authors = []
+            build = "build.rs"
+
+            [build-dependencies.d1]
+            path = "d1"
+        "#)
+        .file("build.rs", "extern crate d1; fn main() {}")
+        .file("src/lib.rs", "")
+        .file("d1/Cargo.toml", &format!(r#"
+            [package]
+            name = "d1"
+            version = "0.0.0"
+            authors = []
+
+            [target.{}.dependencies]
+            d2 = {{ path = "../d2" }}
+        "#, host))
+        .file("d1/src/lib.rs", "extern crate d2;")
+        .file("d2/Cargo.toml", r#"
+            [package]
+            name = "d2"
+            version = "0.0.0"
+            authors = []
+        "#)
+        .file("d2/src/lib.rs", "");
+
+    assert_that(p.cargo_process("build").arg("-v").arg("--target").arg(&target),
+                execs().with_status(0)
+                       .with_stdout(&format!("\
+{compiling} d2 v0.0.0 ([..])
+{running} `rustc d2[..]src[..]lib.rs [..]`
+{compiling} d1 v0.0.0 ([..])
+{running} `rustc d1[..]src[..]lib.rs [..]`
+{compiling} foo v0.0.1 ([..])
+{running} `rustc build.rs [..]`
+{running} `{dir}[..]target[..]build[..]foo-[..]build-script-build`
+{running} `rustc src[..]lib.rs [..] --target {target} [..]`
+", compiling = COMPILING, running = RUNNING, dir = p.root().display(), target = target)));
+});
+
+test!(platform_specific_dependencies_do_not_leak {
+    if disabled() { return }
+
+    let target = alternate();
+    let host = ::rustc_host();
+    let p = project("foo")
+        .file("Cargo.toml", r#"
+            [package]
+            name = "foo"
+            version = "0.0.1"
+            authors = []
+            build = "build.rs"
+
+            [dependencies.d1]
+            path = "d1"
+
+            [build-dependencies.d1]
+            path = "d1"
+        "#)
+        .file("build.rs", "extern crate d1; fn main() {}")
+        .file("src/lib.rs", "")
+        .file("d1/Cargo.toml", &format!(r#"
+            [package]
+            name = "d1"
+            version = "0.0.0"
+            authors = []
+
+            [target.{}.dependencies]
+            d2 = {{ path = "../d2" }}
+        "#, host))
+        .file("d1/src/lib.rs", "extern crate d2;")
+        .file("d2/Cargo.toml", r#"
+            [package]
+            name = "d2"
+            version = "0.0.0"
+            authors = []
+        "#)
+        .file("d2/src/lib.rs", "");
+
+    assert_that(p.cargo_process("build").arg("-v").arg("--target").arg(&target),
+                execs().with_status(101)
+                       .with_stderr("\
+[..] error: can't find crate for `d2`[..]
+[..] extern crate d2;
+[..]
+error: aborting due to previous error
+Could not compile `d1`.
+
+Caused by:
+  [..]
+"));
+});
+
+test!(platform_specific_variables_reflected_in_build_scripts {
+    if disabled() { return }
+
+    let target = alternate();
+    let host = ::rustc_host();
+    let p = project("foo")
+        .file("Cargo.toml", &format!(r#"
+            [package]
+            name = "foo"
+            version = "0.0.1"
+            authors = []
+            build = "build.rs"
+
+            [target.{host}.dependencies]
+            d1 = {{ path = "d1" }}
+
+            [target.{target}.dependencies]
+            d2 = {{ path = "d2" }}
+        "#, host = host, target = target))
+        .file("build.rs", &format!(r#"
+            use std::env;
+
+            fn main() {{
+                let platform = env::var("TARGET").unwrap();
+                let (expected, not_expected) = match &platform[..] {{
+                    "{host}" => ("DEP_D1_VAL", "DEP_D2_VAL"),
+                    "{target}" => ("DEP_D2_VAL", "DEP_D1_VAL"),
+                    _ => panic!("unknown platform")
+                }};
+
+                env::var(expected).ok()
+                    .expect(&format!("missing {{}}", expected));
+                env::var(not_expected).err()
+                    .expect(&format!("found {{}}", not_expected));
+            }}
+        "#, host = host, target = target))
+        .file("src/lib.rs", "")
+        .file("d1/Cargo.toml", r#"
+            [package]
+            name = "d1"
+            version = "0.0.0"
+            authors = []
+            links = "d1"
+            build = "build.rs"
+        "#)
+        .file("d1/build.rs", r#"
+            fn main() { println!("cargo:val=1") }
+        "#)
+        .file("d1/src/lib.rs", "")
+        .file("d2/Cargo.toml", r#"
+            [package]
+            name = "d2"
+            version = "0.0.0"
+            authors = []
+            links = "d2"
+            build = "build.rs"
+        "#)
+        .file("d2/build.rs", r#"
+            fn main() { println!("cargo:val=1") }
+        "#)
+        .file("d2/src/lib.rs", "");
+
+    assert_that(p.cargo_process("build").arg("-v"), execs().with_status(0));
+    assert_that(p.cargo_process("build").arg("-v").arg("--target").arg(&target),
+                execs().with_status(0));
 });
